@@ -6,6 +6,7 @@ import {
   fetchWakatimeStats,
   fetchAllTimeSinceToday,
   fetchSummariesRange,
+  getOverrideTotal,
 } from "../src/fetchers/wakatime.js";
 import { isLocaleAvailable } from "../src/translations.js";
 import {
@@ -118,6 +119,7 @@ export default async (req, res) => {
           }),
         ]);
 
+        const override = getOverrideTotal();
         return res.send(
           JSON.stringify({
             auth: {
@@ -128,6 +130,14 @@ export default async (req, res) => {
                 ? "current (authenticated)"
                 : `${username} (public)`,
             },
+            override: override
+              ? {
+                  active: true,
+                  total_hours: Math.round(override.total_seconds / 3600),
+                  text: override.text,
+                  env_var: "WAKATIME_TOTAL_HOURS",
+                }
+              : { active: false, env_var: "WAKATIME_TOTAL_HOURS (not set)" },
             all_time_since_today: allTimeData?.error
               ? { error: allTimeData }
               : allTimeData

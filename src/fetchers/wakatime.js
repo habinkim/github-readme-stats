@@ -16,6 +16,40 @@ const VALID_RANGES = [
 ];
 
 /**
+ * Formats seconds into a human-readable string.
+ *
+ * @param {number} totalSeconds Total seconds to format.
+ * @returns {string} Formatted time string.
+ */
+const formatTime = (totalSeconds) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  return `${hours.toLocaleString()} hrs ${minutes} mins`;
+};
+
+/**
+ * Gets the override total hours from environment variable if set.
+ * This is useful when the WakaTime API doesn't return accurate historical data.
+ *
+ * @returns {{total_seconds: number, text: string, is_override: boolean} | null} Override data or null.
+ */
+const getOverrideTotal = () => {
+  const overrideHours = process.env.WAKATIME_TOTAL_HOURS;
+  if (overrideHours) {
+    const hours = parseFloat(overrideHours);
+    if (!isNaN(hours) && hours > 0) {
+      const totalSeconds = hours * 3600;
+      return {
+        total_seconds: totalSeconds,
+        text: formatTime(totalSeconds),
+        is_override: true,
+      };
+    }
+  }
+  return null;
+};
+
+/**
  * Fetches the total coding time since account creation.
  * This endpoint provides accurate all-time stats unlike /stats/all_time which may be cached.
  *
@@ -216,7 +250,21 @@ const fetchWakatimeStats = async ({ username, api_domain, range, api_key }) => {
       config,
     );
 
-    return data.data;
+    const stats = data.data;
+
+    // Apply override for all_time range if WAKATIME_TOTAL_HOURS env var is set
+    if (validRange === "all_time") {
+      const override = getOverrideTotal();
+      if (override) {
+        stats.human_readable_total = override.text;
+        stats.human_readable_total_including_other_language = override.text;
+        stats.total_seconds = override.total_seconds;
+        stats.total_seconds_including_other_language = override.total_seconds;
+        stats.is_override = true;
+      }
+    }
+
+    return stats;
   } catch (err) {
     if (err.response.status < 200 || err.response.status > 299) {
       throw new CustomError(
@@ -228,5 +276,10 @@ const fetchWakatimeStats = async ({ username, api_domain, range, api_key }) => {
   }
 };
 
-export { fetchWakatimeStats, fetchAllTimeSinceToday, fetchSummariesRange };
+export {
+  fetchWakatimeStats,
+  fetchAllTimeSinceToday,
+  fetchSummariesRange,
+  getOverrideTotal,
+};
 export default fetchWakatimeStats;
