@@ -21,6 +21,11 @@ import {
 } from "../src/common/error.js";
 import { parseArray, parseBoolean } from "../src/common/ops.js";
 
+// Vercel serverless function config - increase timeout for summaries API
+export const config = {
+  maxDuration: 60, // 60 seconds (requires Pro plan, free plan is 10s)
+};
+
 // @ts-ignore
 export default async (req, res) => {
   const {

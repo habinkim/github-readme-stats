@@ -72,6 +72,7 @@ const fetchSummariesChunk = async ({
       headers: {
         Authorization: `Basic ${authKey}`,
       },
+      timeout: 15000, // 15 second timeout per chunk
     },
   );
   return data.data || [];
@@ -115,18 +116,18 @@ const fetchSummariesRange = async ({ api_domain, api_key, start, end }) => {
       currentStart.setDate(currentStart.getDate() + 1);
     }
 
-    // Fetch all chunks in parallel
-    const chunkResults = await Promise.all(
-      chunks.map((chunk) =>
-        fetchSummariesChunk({
-          api_domain,
-          api_key,
-          start: chunk.start,
-          end: chunk.end,
-          encodedKey,
-        }),
-      ),
-    );
+    // Fetch chunks sequentially to avoid rate limiting
+    const chunkResults = [];
+    for (const chunk of chunks) {
+      const result = await fetchSummariesChunk({
+        api_domain,
+        api_key,
+        start: chunk.start,
+        end: chunk.end,
+        encodedKey,
+      });
+      chunkResults.push(result);
+    }
 
     // Aggregate all summaries
     let totalSeconds = 0;
