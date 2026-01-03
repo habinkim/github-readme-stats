@@ -38,8 +38,9 @@ const fetchWakatimeStats = async ({ username, api_domain, range, api_key }) => {
   // Build request config with optional authentication
   const config = {};
   if (api_key) {
-    // WakaTime API accepts Base64 encoded API key as Basic auth
-    const encodedKey = Buffer.from(api_key).toString("base64");
+    // WakaTime API uses HTTP Basic Auth with API key as username and empty password
+    // Format: Base64(api_key:) - trailing colon is required!
+    const encodedKey = Buffer.from(`${api_key}:`).toString("base64");
     config.headers = {
       Authorization: `Basic ${encodedKey}`,
     };
