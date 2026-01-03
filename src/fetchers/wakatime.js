@@ -28,23 +28,94 @@ const formatTime = (totalSeconds) => {
 };
 
 /**
- * Gets the override total hours from environment variable if set.
- * This is useful when the WakaTime API doesn't return accurate historical data.
+ * Gets the actual total hours from environment variable for correction calculation.
+ * WakaTime API often returns ~55% of actual coding time due to aggregation issues.
  *
+ * @returns {number | null} Actual total hours from PDF report, or null if not set.
+ */
+const getActualTotalHours = () => {
+  // Support both env var names for backwards compatibility
+  const actualHours =
+    process.env.WAKATIME_ACTUAL_HOURS || process.env.WAKATIME_TOTAL_HOURS;
+  if (actualHours) {
+    const hours = parseFloat(actualHours);
+    if (!isNaN(hours) && hours > 0) {
+      return hours;
+    }
+  }
+  return null;
+};
+
+/**
+ * Applies correction factor to all stats data (total and per-language).
+ * This fixes the WakaTime API issue where it returns only ~55% of actual time.
+ *
+ * @param {object} stats The stats object from WakaTime API.
+ * @param {number} actualHours The actual total hours from PDF report.
+ * @returns {object} Corrected stats with all values proportionally adjusted.
+ */
+const applyCorrection = (stats, actualHours) => {
+  const apiTotalSeconds =
+    stats.total_seconds_including_other_language || stats.total_seconds || 0;
+  if (apiTotalSeconds <= 0) {
+    return stats;
+  }
+
+  const actualTotalSeconds = actualHours * 3600;
+  const correctionFactor = actualTotalSeconds / apiTotalSeconds;
+
+  // Correct total values
+  stats.total_seconds = Math.round(stats.total_seconds * correctionFactor);
+  stats.total_seconds_including_other_language = Math.round(
+    (stats.total_seconds_including_other_language || stats.total_seconds) *
+      correctionFactor,
+  );
+  stats.human_readable_total = formatTime(stats.total_seconds);
+  stats.human_readable_total_including_other_language = formatTime(
+    stats.total_seconds_including_other_language,
+  );
+
+  // Correct each language's time
+  if (stats.languages && Array.isArray(stats.languages)) {
+    stats.languages = stats.languages.map((lang) => {
+      const correctedSeconds = Math.round(
+        (lang.total_seconds || 0) * correctionFactor,
+      );
+      const correctedHours = Math.floor(correctedSeconds / 3600);
+      const correctedMinutes = Math.floor((correctedSeconds % 3600) / 60);
+      return {
+        ...lang,
+        total_seconds: correctedSeconds,
+        hours: correctedHours,
+        minutes: correctedMinutes,
+        text: `${correctedHours.toLocaleString()} hrs ${correctedMinutes} mins`,
+        // percent stays the same (relative proportions unchanged)
+      };
+    });
+  }
+
+  // Mark as corrected for debugging
+  stats.is_corrected = true;
+  stats.correction_factor = correctionFactor;
+  stats.actual_hours_source = "WAKATIME_ACTUAL_HOURS";
+
+  return stats;
+};
+
+/**
+ * Gets the override total hours from environment variable if set.
+ * @deprecated Use getActualTotalHours() and applyCorrection() instead.
  * @returns {{total_seconds: number, text: string, is_override: boolean} | null} Override data or null.
  */
 const getOverrideTotal = () => {
-  const overrideHours = process.env.WAKATIME_TOTAL_HOURS;
-  if (overrideHours) {
-    const hours = parseFloat(overrideHours);
-    if (!isNaN(hours) && hours > 0) {
-      const totalSeconds = hours * 3600;
-      return {
-        total_seconds: totalSeconds,
-        text: formatTime(totalSeconds),
-        is_override: true,
-      };
-    }
+  const hours = getActualTotalHours();
+  if (hours) {
+    const totalSeconds = hours * 3600;
+    return {
+      total_seconds: totalSeconds,
+      text: formatTime(totalSeconds),
+      is_override: true,
+    };
   }
   return null;
 };
@@ -250,17 +321,14 @@ const fetchWakatimeStats = async ({ username, api_domain, range, api_key }) => {
       config,
     );
 
-    const stats = data.data;
+    let stats = data.data;
 
-    // Apply override for all_time range if WAKATIME_TOTAL_HOURS env var is set
+    // Apply correction factor for all_time range if WAKATIME_ACTUAL_HOURS env var is set
+    // This corrects BOTH total AND per-language times proportionally
     if (validRange === "all_time") {
-      const override = getOverrideTotal();
-      if (override) {
-        stats.human_readable_total = override.text;
-        stats.human_readable_total_including_other_language = override.text;
-        stats.total_seconds = override.total_seconds;
-        stats.total_seconds_including_other_language = override.total_seconds;
-        stats.is_override = true;
+      const actualHours = getActualTotalHours();
+      if (actualHours) {
+        stats = applyCorrection(stats, actualHours);
       }
     }
 
@@ -281,5 +349,7 @@ export {
   fetchAllTimeSinceToday,
   fetchSummariesRange,
   getOverrideTotal,
+  getActualTotalHours,
+  applyCorrection,
 };
 export default fetchWakatimeStats;

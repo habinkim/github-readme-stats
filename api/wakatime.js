@@ -130,14 +130,22 @@ export default async (req, res) => {
                 ? "current (authenticated)"
                 : `${username} (public)`,
             },
-            override: override
+            correction: debugStats.is_corrected
               ? {
                   active: true,
-                  total_hours: Math.round(override.total_seconds / 3600),
-                  text: override.text,
-                  env_var: "WAKATIME_TOTAL_HOURS",
+                  factor: debugStats.correction_factor?.toFixed(4),
+                  actual_hours: Math.round(debugStats.total_seconds / 3600),
+                  env_var: "WAKATIME_ACTUAL_HOURS",
+                  note: "All values (total + languages) are proportionally corrected",
                 }
-              : { active: false, env_var: "WAKATIME_TOTAL_HOURS (not set)" },
+              : override
+                ? {
+                    active: true,
+                    total_hours: Math.round(override.total_seconds / 3600),
+                    text: override.text,
+                    env_var: "WAKATIME_TOTAL_HOURS (legacy)",
+                  }
+                : { active: false, env_var: "WAKATIME_ACTUAL_HOURS (not set)" },
             all_time_since_today: allTimeData?.error
               ? { error: allTimeData }
               : allTimeData
@@ -164,19 +172,18 @@ export default async (req, res) => {
               username: debugStats.username,
               user_id: debugStats.user_id,
               range: debugStats.range,
+              is_corrected: debugStats.is_corrected || false,
+              correction_factor:
+                debugStats.correction_factor?.toFixed(4) || null,
               is_including_today: debugStats.is_including_today,
               human_readable_total: debugStats.human_readable_total,
-              human_readable_total_including_other_language:
-                debugStats.human_readable_total_including_other_language,
               total_seconds: debugStats.total_seconds,
-              total_seconds_including_other_language:
-                debugStats.total_seconds_including_other_language,
-              is_other_usage_visible: debugStats.is_other_usage_visible,
               is_coding_activity_visible: debugStats.is_coding_activity_visible,
               languages_count: debugStats.languages?.length || 0,
               top_languages: debugStats.languages?.slice(0, 5).map((l) => ({
                 name: l.name,
                 hours: l.hours,
+                text: l.text,
                 percent: l.percent,
               })),
             },
