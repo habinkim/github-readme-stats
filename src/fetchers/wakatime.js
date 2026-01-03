@@ -51,8 +51,35 @@ const fetchAllTimeSinceToday = async ({ api_domain, api_key }) => {
 };
 
 /**
+ * Fetches summaries for a single date range chunk (max 365 days).
+ *
+ * @param {{api_domain: string, api_key: string, start: string, end: string, encodedKey: string}} props Fetcher props.
+ * @returns {Promise<object>} Raw summaries data for the chunk.
+ */
+const fetchSummariesChunk = async ({
+  api_domain,
+  api_key,
+  start,
+  end,
+  encodedKey,
+}) => {
+  const baseUrl = api_domain ? api_domain.replace(/\/$/gi, "") : "wakatime.com";
+  const authKey = encodedKey || Buffer.from(`${api_key}:`).toString("base64");
+
+  const { data } = await axios.get(
+    `https://${baseUrl}/api/v1/users/current/summaries?start=${start}&end=${end}`,
+    {
+      headers: {
+        Authorization: `Basic ${authKey}`,
+      },
+    },
+  );
+  return data.data || [];
+};
+
+/**
  * Fetches summaries for a date range and aggregates the total.
- * This endpoint provides more accurate data than /stats/all_time.
+ * Automatically chunks requests into 365-day segments to avoid API limits.
  *
  * @param {{api_domain: string, api_key: string, start: string, end: string}} props Fetcher props.
  * @returns {Promise<object>} Aggregated summaries data.
@@ -62,31 +89,60 @@ const fetchSummariesRange = async ({ api_domain, api_key, start, end }) => {
     return { error: "no_api_key" };
   }
 
-  const baseUrl = api_domain ? api_domain.replace(/\/$/gi, "") : "wakatime.com";
   const encodedKey = Buffer.from(`${api_key}:`).toString("base64");
 
   try {
-    const { data } = await axios.get(
-      `https://${baseUrl}/api/v1/users/current/summaries?start=${start}&end=${end}`,
-      {
-        headers: {
-          Authorization: `Basic ${encodedKey}`,
-        },
-      },
+    // Generate date chunks (max 365 days each)
+    const chunks = [];
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    let currentStart = new Date(startDate);
+
+    while (currentStart < endDate) {
+      const currentEnd = new Date(currentStart);
+      currentEnd.setDate(currentEnd.getDate() + 364); // 365 days max
+
+      if (currentEnd > endDate) {
+        currentEnd.setTime(endDate.getTime());
+      }
+
+      chunks.push({
+        start: currentStart.toISOString().split("T")[0],
+        end: currentEnd.toISOString().split("T")[0],
+      });
+
+      currentStart = new Date(currentEnd);
+      currentStart.setDate(currentStart.getDate() + 1);
+    }
+
+    // Fetch all chunks in parallel
+    const chunkResults = await Promise.all(
+      chunks.map((chunk) =>
+        fetchSummariesChunk({
+          api_domain,
+          api_key,
+          start: chunk.start,
+          end: chunk.end,
+          encodedKey,
+        }),
+      ),
     );
 
-    // Aggregate daily summaries
-    const summaries = data.data || [];
+    // Aggregate all summaries
     let totalSeconds = 0;
+    let totalDays = 0;
     const languageMap = new Map();
 
-    for (const day of summaries) {
-      totalSeconds += day.grand_total?.total_seconds || 0;
+    for (const summaries of chunkResults) {
+      totalDays += summaries.length;
+      for (const day of summaries) {
+        totalSeconds += day.grand_total?.total_seconds || 0;
 
-      // Aggregate languages
-      for (const lang of day.languages || []) {
-        const existing = languageMap.get(lang.name) || 0;
-        languageMap.set(lang.name, existing + (lang.total_seconds || 0));
+        // Aggregate languages
+        for (const lang of day.languages || []) {
+          const existing = languageMap.get(lang.name) || 0;
+          languageMap.set(lang.name, existing + (lang.total_seconds || 0));
+        }
       }
     }
 
@@ -108,7 +164,8 @@ const fetchSummariesRange = async ({ api_domain, api_key, start, end }) => {
       total_seconds: totalSeconds,
       text: `${hours.toLocaleString()} hrs ${minutes} mins`,
       languages,
-      days_count: summaries.length,
+      days_count: totalDays,
+      chunks_fetched: chunks.length,
       start,
       end,
     };
