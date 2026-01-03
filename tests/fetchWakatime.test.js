@@ -142,6 +142,30 @@ describe("WakaTime fetcher", () => {
       "Could not resolve to a User with the login of 'noone'",
     );
   });
+
+  it("should fetch WakaTime data with API key authentication", async () => {
+    const api_key = "waka_test_api_key_12345";
+    mock
+      .onGet(
+        `https://wakatime.com/api/v1/users/current/stats/last_7_days?is_including_today=true`,
+      )
+      .reply(200, wakaTimeData);
+
+    const repo = await fetchWakatimeStats({ username: "anuraghazra", api_key });
+    expect(repo).toStrictEqual(wakaTimeData.data);
+  });
+
+  it("should use 'current' endpoint when api_key is provided", async () => {
+    const api_key = "waka_test_api_key";
+    mock
+      .onGet(
+        `https://wakatime.com/api/v1/users/current/stats/all_time?is_including_today=true`,
+      )
+      .reply(200, wakaTimeData);
+
+    const repo = await fetchWakatimeStats({ api_key, range: "all_time" });
+    expect(repo).toStrictEqual(wakaTimeData.data);
+  });
 });
 
 export { wakaTimeData };

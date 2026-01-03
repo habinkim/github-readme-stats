@@ -80,7 +80,14 @@ export default async (req, res) => {
   }
 
   try {
-    const stats = await fetchWakatimeStats({ username, api_domain, range });
+    // Use WAKATIME_API_KEY from environment for authenticated requests (includes private projects)
+    const api_key = process.env.WAKATIME_API_KEY;
+    const stats = await fetchWakatimeStats({
+      username,
+      api_domain,
+      range,
+      api_key,
+    });
     const cacheSeconds = resolveCacheSeconds({
       requested: parseInt(cache_seconds, 10),
       def: CACHE_TTL.WAKATIME_CARD.DEFAULT,
