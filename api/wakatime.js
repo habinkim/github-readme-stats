@@ -83,19 +83,67 @@ export default async (req, res) => {
     // Use WAKATIME_API_KEY from environment for authenticated requests (includes private projects)
     const api_key = process.env.WAKATIME_API_KEY;
 
-    // Debug mode: show API key status (not the actual key)
+    // Debug mode: show API key status and stats metadata
     if (req.query.debug === "true") {
       res.setHeader("Content-Type", "application/json");
-      return res.send(
-        JSON.stringify({
-          hasApiKey: !!api_key,
-          apiKeyLength: api_key ? api_key.length : 0,
-          apiKeyPrefix: api_key ? api_key.substring(0, 8) + "..." : null,
-          endpoint: api_key
-            ? "current (authenticated)"
-            : `${username} (public)`,
-        }),
-      );
+
+      // Also fetch stats in debug mode to show metadata
+      try {
+        const debugStats = await fetchWakatimeStats({
+          username,
+          api_domain,
+          range,
+          api_key,
+        });
+        return res.send(
+          JSON.stringify({
+            auth: {
+              hasApiKey: !!api_key,
+              apiKeyLength: api_key ? api_key.length : 0,
+              apiKeyPrefix: api_key ? api_key.substring(0, 8) + "..." : null,
+              endpoint: api_key
+                ? "current (authenticated)"
+                : `${username} (public)`,
+            },
+            stats: {
+              username: debugStats.username,
+              user_id: debugStats.user_id,
+              range: debugStats.range,
+              is_including_today: debugStats.is_including_today,
+              human_readable_total: debugStats.human_readable_total,
+              human_readable_total_including_other_language:
+                debugStats.human_readable_total_including_other_language,
+              total_seconds: debugStats.total_seconds,
+              total_seconds_including_other_language:
+                debugStats.total_seconds_including_other_language,
+              is_other_usage_visible: debugStats.is_other_usage_visible,
+              is_coding_activity_visible: debugStats.is_coding_activity_visible,
+              languages_count: debugStats.languages?.length || 0,
+              top_languages: debugStats.languages
+                ?.slice(0, 5)
+                .map((l) => ({
+                  name: l.name,
+                  hours: l.hours,
+                  percent: l.percent,
+                })),
+            },
+          }),
+        );
+      } catch (debugErr) {
+        return res.send(
+          JSON.stringify({
+            auth: {
+              hasApiKey: !!api_key,
+              apiKeyLength: api_key ? api_key.length : 0,
+              apiKeyPrefix: api_key ? api_key.substring(0, 8) + "..." : null,
+              endpoint: api_key
+                ? "current (authenticated)"
+                : `${username} (public)`,
+            },
+            error: debugErr.message,
+          }),
+        );
+      }
     }
 
     const stats = await fetchWakatimeStats({
