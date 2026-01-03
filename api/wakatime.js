@@ -82,6 +82,22 @@ export default async (req, res) => {
   try {
     // Use WAKATIME_API_KEY from environment for authenticated requests (includes private projects)
     const api_key = process.env.WAKATIME_API_KEY;
+
+    // Debug mode: show API key status (not the actual key)
+    if (req.query.debug === "true") {
+      res.setHeader("Content-Type", "application/json");
+      return res.send(
+        JSON.stringify({
+          hasApiKey: !!api_key,
+          apiKeyLength: api_key ? api_key.length : 0,
+          apiKeyPrefix: api_key ? api_key.substring(0, 8) + "..." : null,
+          endpoint: api_key
+            ? "current (authenticated)"
+            : `${username} (public)`,
+        }),
+      );
+    }
+
     const stats = await fetchWakatimeStats({
       username,
       api_domain,
