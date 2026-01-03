@@ -5,6 +5,7 @@ import { renderError } from "../src/common/render.js";
 import {
   fetchWakatimeStats,
   fetchAllTimeSinceToday,
+  fetchSummariesRange,
 } from "../src/fetchers/wakatime.js";
 import { isLocaleAvailable } from "../src/translations.js";
 import {
@@ -90,9 +91,13 @@ export default async (req, res) => {
     if (req.query.debug === "true") {
       res.setHeader("Content-Type", "application/json");
 
-      // Fetch both stats and all_time_since_today for comparison
+      // Fetch stats, all_time_since_today, and summaries for comparison
       try {
-        const [debugStats, allTimeData] = await Promise.all([
+        // Get summaries from account start date (2020-03-10) to today
+        const today = new Date().toISOString().split("T")[0];
+        const startDate = "2020-03-10"; // Account creation date
+
+        const [debugStats, allTimeData, summariesData] = await Promise.all([
           fetchWakatimeStats({
             username,
             api_domain,
@@ -100,6 +105,12 @@ export default async (req, res) => {
             api_key,
           }),
           fetchAllTimeSinceToday({ api_domain, api_key }),
+          fetchSummariesRange({
+            api_domain,
+            api_key,
+            start: startDate,
+            end: today,
+          }),
         ]);
 
         return res.send(
@@ -120,6 +131,18 @@ export default async (req, res) => {
                     total_seconds: allTimeData.total_seconds,
                     total_hours: Math.round(allTimeData.total_seconds / 3600),
                     daily_average: allTimeData.daily_average,
+                  }
+                : null,
+            summaries_range: summariesData?.error
+              ? { error: summariesData }
+              : summariesData
+                ? {
+                    text: summariesData.text,
+                    total_seconds: summariesData.total_seconds,
+                    total_hours: Math.round(summariesData.total_seconds / 3600),
+                    days_count: summariesData.days_count,
+                    date_range: `${summariesData.start} ~ ${summariesData.end}`,
+                    top_languages: summariesData.languages?.slice(0, 5),
                   }
                 : null,
             stats: {

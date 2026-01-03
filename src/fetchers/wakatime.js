@@ -51,6 +51,77 @@ const fetchAllTimeSinceToday = async ({ api_domain, api_key }) => {
 };
 
 /**
+ * Fetches summaries for a date range and aggregates the total.
+ * This endpoint provides more accurate data than /stats/all_time.
+ *
+ * @param {{api_domain: string, api_key: string, start: string, end: string}} props Fetcher props.
+ * @returns {Promise<object>} Aggregated summaries data.
+ */
+const fetchSummariesRange = async ({ api_domain, api_key, start, end }) => {
+  if (!api_key) {
+    return { error: "no_api_key" };
+  }
+
+  const baseUrl = api_domain ? api_domain.replace(/\/$/gi, "") : "wakatime.com";
+  const encodedKey = Buffer.from(`${api_key}:`).toString("base64");
+
+  try {
+    const { data } = await axios.get(
+      `https://${baseUrl}/api/v1/users/current/summaries?start=${start}&end=${end}`,
+      {
+        headers: {
+          Authorization: `Basic ${encodedKey}`,
+        },
+      },
+    );
+
+    // Aggregate daily summaries
+    const summaries = data.data || [];
+    let totalSeconds = 0;
+    const languageMap = new Map();
+
+    for (const day of summaries) {
+      totalSeconds += day.grand_total?.total_seconds || 0;
+
+      // Aggregate languages
+      for (const lang of day.languages || []) {
+        const existing = languageMap.get(lang.name) || 0;
+        languageMap.set(lang.name, existing + (lang.total_seconds || 0));
+      }
+    }
+
+    // Convert language map to sorted array
+    const languages = Array.from(languageMap.entries())
+      .map(([name, total_seconds]) => ({
+        name,
+        total_seconds,
+        hours: Math.floor(total_seconds / 3600),
+        minutes: Math.floor((total_seconds % 3600) / 60),
+        percent: totalSeconds > 0 ? (total_seconds / totalSeconds) * 100 : 0,
+      }))
+      .sort((a, b) => b.total_seconds - a.total_seconds);
+
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+    return {
+      total_seconds: totalSeconds,
+      text: `${hours.toLocaleString()} hrs ${minutes} mins`,
+      languages,
+      days_count: summaries.length,
+      start,
+      end,
+    };
+  } catch (err) {
+    return {
+      error: err.message,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+    };
+  }
+};
+
+/**
  * WakaTime data fetcher.
  *
  * @param {{username: string, api_domain: string, range: string, api_key: string }} props Fetcher props.
@@ -99,5 +170,5 @@ const fetchWakatimeStats = async ({ username, api_domain, range, api_key }) => {
   }
 };
 
-export { fetchWakatimeStats, fetchAllTimeSinceToday };
+export { fetchWakatimeStats, fetchAllTimeSinceToday, fetchSummariesRange };
 export default fetchWakatimeStats;
