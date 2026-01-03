@@ -2,7 +2,10 @@
 
 import { renderWakatimeCard } from "../src/cards/wakatime.js";
 import { renderError } from "../src/common/render.js";
-import { fetchWakatimeStats } from "../src/fetchers/wakatime.js";
+import {
+  fetchWakatimeStats,
+  fetchAllTimeSinceToday,
+} from "../src/fetchers/wakatime.js";
 import { isLocaleAvailable } from "../src/translations.js";
 import {
   CACHE_TTL,
@@ -87,14 +90,18 @@ export default async (req, res) => {
     if (req.query.debug === "true") {
       res.setHeader("Content-Type", "application/json");
 
-      // Also fetch stats in debug mode to show metadata
+      // Fetch both stats and all_time_since_today for comparison
       try {
-        const debugStats = await fetchWakatimeStats({
-          username,
-          api_domain,
-          range,
-          api_key,
-        });
+        const [debugStats, allTimeData] = await Promise.all([
+          fetchWakatimeStats({
+            username,
+            api_domain,
+            range,
+            api_key,
+          }),
+          fetchAllTimeSinceToday({ api_domain, api_key }),
+        ]);
+
         return res.send(
           JSON.stringify({
             auth: {
@@ -105,6 +112,14 @@ export default async (req, res) => {
                 ? "current (authenticated)"
                 : `${username} (public)`,
             },
+            all_time_since_today: allTimeData
+              ? {
+                  text: allTimeData.text,
+                  total_seconds: allTimeData.total_seconds,
+                  total_hours: Math.round(allTimeData.total_seconds / 3600),
+                  daily_average: allTimeData.daily_average,
+                }
+              : null,
             stats: {
               username: debugStats.username,
               user_id: debugStats.user_id,
@@ -119,13 +134,11 @@ export default async (req, res) => {
               is_other_usage_visible: debugStats.is_other_usage_visible,
               is_coding_activity_visible: debugStats.is_coding_activity_visible,
               languages_count: debugStats.languages?.length || 0,
-              top_languages: debugStats.languages
-                ?.slice(0, 5)
-                .map((l) => ({
-                  name: l.name,
-                  hours: l.hours,
-                  percent: l.percent,
-                })),
+              top_languages: debugStats.languages?.slice(0, 5).map((l) => ({
+                name: l.name,
+                hours: l.hours,
+                percent: l.percent,
+              })),
             },
           }),
         );

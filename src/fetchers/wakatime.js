@@ -16,6 +16,37 @@ const VALID_RANGES = [
 ];
 
 /**
+ * Fetches the total coding time since account creation.
+ * This endpoint provides accurate all-time stats unlike /stats/all_time which may be cached.
+ *
+ * @param {{api_domain: string, api_key: string}} props Fetcher props.
+ * @returns {Promise<{total_seconds: number, text: string, daily_average: number}>} All time data.
+ */
+const fetchAllTimeSinceToday = async ({ api_domain, api_key }) => {
+  if (!api_key) {
+    return null;
+  }
+
+  const baseUrl = api_domain ? api_domain.replace(/\/$/gi, "") : "wakatime.com";
+  const encodedKey = Buffer.from(`${api_key}:`).toString("base64");
+
+  try {
+    const { data } = await axios.get(
+      `https://${baseUrl}/api/v1/users/current/all_time_since_today`,
+      {
+        headers: {
+          Authorization: `Basic ${encodedKey}`,
+        },
+      },
+    );
+    return data.data;
+  } catch {
+    // If this endpoint fails, return null and fall back to stats
+    return null;
+  }
+};
+
+/**
  * WakaTime data fetcher.
  *
  * @param {{username: string, api_domain: string, range: string, api_key: string }} props Fetcher props.
@@ -64,5 +95,5 @@ const fetchWakatimeStats = async ({ username, api_domain, range, api_key }) => {
   }
 };
 
-export { fetchWakatimeStats };
+export { fetchWakatimeStats, fetchAllTimeSinceToday };
 export default fetchWakatimeStats;
