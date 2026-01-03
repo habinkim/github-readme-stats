@@ -112,14 +112,16 @@ export default async (req, res) => {
                 ? "current (authenticated)"
                 : `${username} (public)`,
             },
-            all_time_since_today: allTimeData
-              ? {
-                  text: allTimeData.text,
-                  total_seconds: allTimeData.total_seconds,
-                  total_hours: Math.round(allTimeData.total_seconds / 3600),
-                  daily_average: allTimeData.daily_average,
-                }
-              : null,
+            all_time_since_today: allTimeData?.error
+              ? { error: allTimeData }
+              : allTimeData
+                ? {
+                    text: allTimeData.text,
+                    total_seconds: allTimeData.total_seconds,
+                    total_hours: Math.round(allTimeData.total_seconds / 3600),
+                    daily_average: allTimeData.daily_average,
+                  }
+                : null,
             stats: {
               username: debugStats.username,
               user_id: debugStats.user_id,

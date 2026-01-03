@@ -24,7 +24,7 @@ const VALID_RANGES = [
  */
 const fetchAllTimeSinceToday = async ({ api_domain, api_key }) => {
   if (!api_key) {
-    return null;
+    return { error: "no_api_key" };
   }
 
   const baseUrl = api_domain ? api_domain.replace(/\/$/gi, "") : "wakatime.com";
@@ -40,9 +40,13 @@ const fetchAllTimeSinceToday = async ({ api_domain, api_key }) => {
       },
     );
     return data.data;
-  } catch {
-    // If this endpoint fails, return null and fall back to stats
-    return null;
+  } catch (err) {
+    // Return error info for debugging
+    return {
+      error: err.message,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+    };
   }
 };
 
