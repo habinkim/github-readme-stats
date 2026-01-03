@@ -107,11 +107,23 @@ describe("WakaTime fetcher", () => {
     const username = "anuraghazra";
     mock
       .onGet(
-        `https://wakatime.com/api/v1/users/${username}/stats?is_including_today=true`,
+        `https://wakatime.com/api/v1/users/${username}/stats/last_7_days?is_including_today=true`,
       )
       .reply(200, wakaTimeData);
 
     const repo = await fetchWakatimeStats({ username });
+    expect(repo).toStrictEqual(wakaTimeData.data);
+  });
+
+  it("should fetch WakaTime data with custom range", async () => {
+    const username = "anuraghazra";
+    mock
+      .onGet(
+        `https://wakatime.com/api/v1/users/${username}/stats/all_time?is_including_today=true`,
+      )
+      .reply(200, wakaTimeData);
+
+    const repo = await fetchWakatimeStats({ username, range: "all_time" });
     expect(repo).toStrictEqual(wakaTimeData.data);
   });
 

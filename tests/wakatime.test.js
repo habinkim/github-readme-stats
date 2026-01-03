@@ -111,7 +111,7 @@ describe("Test /api/wakatime", () => {
     const res = { setHeader: jest.fn(), send: jest.fn() };
     mock
       .onGet(
-        `https://wakatime.com/api/v1/users/${username}/stats?is_including_today=true`,
+        `https://wakatime.com/api/v1/users/${username}/stats/last_7_days?is_including_today=true`,
       )
       .reply(200, wakaTimeData);
 
@@ -129,7 +129,7 @@ describe("Test /api/wakatime", () => {
     const res = { setHeader: jest.fn(), send: jest.fn() };
     mock
       .onGet(
-        `https://wakatime.com/api/v1/users/${username}/stats?is_including_today=true`,
+        `https://wakatime.com/api/v1/users/${username}/stats/last_7_days?is_including_today=true`,
       )
       .reply(200, wakaTimeData);
 
